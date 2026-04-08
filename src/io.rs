@@ -37,6 +37,22 @@ pub mod irq {
     pub const GAMEPAK: u16 = 1 << 13;
 }
 
+/// DMA control register (CNT_H) bit constants
+#[allow(dead_code)]
+pub mod dma_cnt {
+    pub const DST_CTRL:         u16 = 0b11 << 0;  // bits 0-1: dst address control
+    pub const SRC_CTRL:         u16 = 0b11 << 2;  // bits 2-3: src address control
+    pub const REPEAT:           u16 = 1 << 4;      // bit 4: repeat on trigger
+    pub const WORD:             u16 = 1 << 5;      // bit 5: 0=16-bit, 1=32-bit
+    pub const TIMING:           u16 = 0b11 << 7;   // bits 7-8: start timing
+    pub const TIMING_IMMEDIATE: u16 = 0 << 7;      // start immediately
+    pub const TIMING_VBLANK:    u16 = 1 << 7;      // start at VBlank
+    pub const TIMING_HBLANK:    u16 = 2 << 7;      // start at HBlank
+    pub const TIMING_SPECIAL:   u16 = 3 << 7;      // sound FIFO / video capture
+    pub const IRQ:              u16 = 1 << 14;     // bit 14: fire IRQ on completion
+    pub const ENABLE:           u16 = 1 << 15;     // bit 15: DMA enable
+}
+
 /// Key input bits (active low in KEYINPUT register)
 #[allow(dead_code)]
 pub mod keys {

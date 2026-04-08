@@ -128,7 +128,7 @@ impl Cpu {
         self.pipeline_valid = false;
     }
 
-    /// Get current PC 
+    /// Get current PC
     pub fn pc(&self) -> u32 {
         self.regs[15]
     }
@@ -174,7 +174,7 @@ impl Cpu {
         self.pipeline_valid = true;
     }
 
-    /// Flush the pipeline 
+    /// Flush the pipeline
     pub fn flush_pipeline(&mut self, bus: &Bus) {
         self.pipeline_valid = false;
         self.fill_pipeline(bus);
@@ -357,7 +357,7 @@ impl Cpu {
                 }
 
                 0x0 | 0x1 | 0xC | 0xD | 0xE | 0xF => {
-                    
+
                 }
                 _ => {}
             }

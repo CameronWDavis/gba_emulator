@@ -1,7 +1,7 @@
 
 use super::arm7tdmi::{Cpu, Mode};
 use crate::memory::Bus;
- 
+
 impl Cpu {
     /// Execute one ARM instruction, return cycles
     pub fn execute_arm(&mut self, bus: &mut Bus) -> u32 {
@@ -10,17 +10,17 @@ impl Cpu {
         self.pipeline[0] = self.pipeline[1];
         self.pipeline[1] = bus.read32(self.regs[15]);
         self.regs[15] = self.regs[15].wrapping_add(4);
- 
+
         // Check condition
         let cond = instr >> 28;
         if !self.check_condition(cond) {
             return 1; // 1S cycle for skipped instruction
         }
- 
+
         // Decode by bits [27:20] and [7:4]
         let bits_27_20 = (instr >> 20) & 0xFF;
         let bits_7_4 = (instr >> 4) & 0xF;
- 
+
         match bits_27_20 >> 5 {
             0b000 => {
                 if bits_27_20 == 0b00010010 && bits_7_4 == 0b0001 {
@@ -87,15 +87,15 @@ impl Cpu {
             _ => 1,
         }
     }
- 
+
     fn arm_data_processing(&mut self, instr: u32, bus: &Bus) -> u32 {
         let opcode = (instr >> 21) & 0xF;
         let set_flags = instr & (1 << 20) != 0;
         let rn = ((instr >> 16) & 0xF) as usize;
         let rd = ((instr >> 12) & 0xF) as usize;
- 
+
         let op1 = if rn == 15 { self.regs[15] } else { self.regs[rn] };
- 
+
         let (op2, carry) = if instr & (1 << 25) != 0 {
             // Immediate operand
             let imm = instr & 0xFF;
@@ -112,7 +112,7 @@ impl Cpu {
             let rm = (instr & 0xF) as usize;
             let rm_val = if rm == 15 { self.regs[15] } else { self.regs[rm] };
             let shift_type = (instr >> 5) & 3;
- 
+
             if instr & (1 << 4) != 0 {
                 // Register-specified shift
                 let rs = ((instr >> 8) & 0xF) as usize;
@@ -142,13 +142,13 @@ impl Cpu {
                 }
             }
         };
- 
+
         // For logical ops, the carry from the shifter should be used
         let old_carry = self.cpsr.c();
         if set_flags && matches!(opcode, 0x0 | 0x1 | 0x8 | 0x9 | 0xC | 0xD | 0xE | 0xF) {
             self.cpsr.set_c(carry);
         }
- 
+
         if let Some(result) = self.alu_op(opcode, rd, op1, op2, set_flags, old_carry) {
             self.regs[rd] = result;
             if rd == 15 {
@@ -161,27 +161,27 @@ impl Cpu {
                 return 3;
             }
         }
- 
+
         1
     }
- 
+
     fn arm_branch(&mut self, instr: u32, bus: &Bus) -> u32 {
         let link = instr & (1 << 24) != 0;
         let offset = ((instr & 0x00FFFFFF) as i32) << 8 >> 6; // Sign-extend and shift left 2
- 
+
         if link {
             self.regs[14] = self.regs[15].wrapping_sub(4);
         }
- 
+
         self.regs[15] = (self.regs[15] as i32).wrapping_add(offset) as u32;
         self.flush_pipeline(bus);
         3
     }
- 
+
     fn arm_bx(&mut self, instr: u32, bus: &Bus) -> u32 {
         let rm = (instr & 0xF) as usize;
         let addr = self.regs[rm];
- 
+
         if addr & 1 != 0 {
             self.cpsr.set_t(true);
             self.regs[15] = addr & !1;
@@ -189,11 +189,11 @@ impl Cpu {
             self.cpsr.set_t(false);
             self.regs[15] = addr & !3;
         }
- 
+
         self.flush_pipeline(bus);
         3
     }
- 
+
     fn arm_single_transfer(&mut self, instr: u32, bus: &mut Bus) -> u32 {
         let pre = instr & (1 << 24) != 0;
         let up = instr & (1 << 23) != 0;
@@ -202,9 +202,9 @@ impl Cpu {
         let load = instr & (1 << 20) != 0;
         let rn = ((instr >> 16) & 0xF) as usize;
         let rd = ((instr >> 12) & 0xF) as usize;
- 
+
         let base = self.regs[rn];
- 
+
         let offset = if instr & (1 << 25) != 0 {
             // Register offset with shift
             let rm = (instr & 0xF) as usize;
@@ -216,13 +216,13 @@ impl Cpu {
             // Immediate offset
             instr & 0xFFF
         };
- 
+
         let addr = if pre {
             if up { base.wrapping_add(offset) } else { base.wrapping_sub(offset) }
         } else {
             base
         };
- 
+
         if load {
             let val = if byte {
                 bus.read8(addr) as u32
@@ -244,7 +244,7 @@ impl Cpu {
                 bus.write32(addr, val);
             }
         }
- 
+
         // Post-index or writeback
         if !pre {
             let final_addr = if up { base.wrapping_add(offset) } else { base.wrapping_sub(offset) };
@@ -252,10 +252,10 @@ impl Cpu {
         } else if writeback {
             self.regs[rn] = addr;
         }
- 
+
         if load { 3 } else { 2 }
     }
- 
+
     fn arm_halfword_transfer(&mut self, instr: u32, bus: &mut Bus) -> u32 {
         let pre = instr & (1 << 24) != 0;
         let up = instr & (1 << 23) != 0;
@@ -265,20 +265,20 @@ impl Cpu {
         let rn = ((instr >> 16) & 0xF) as usize;
         let rd = ((instr >> 12) & 0xF) as usize;
         let op = (instr >> 5) & 3;
- 
+
         let base = self.regs[rn];
         let offset = if imm_offset {
             ((instr >> 4) & 0xF0) | (instr & 0xF)
         } else {
             self.regs[(instr & 0xF) as usize]
         };
- 
+
         let addr = if pre {
             if up { base.wrapping_add(offset) } else { base.wrapping_sub(offset) }
         } else {
             base
         };
- 
+
         match op {
             1 => { // LDRH / STRH (unsigned halfword)
                 if load {
@@ -295,17 +295,17 @@ impl Cpu {
             }
             _ => {}
         }
- 
+
         if !pre {
             let final_addr = if up { base.wrapping_add(offset) } else { base.wrapping_sub(offset) };
             self.regs[rn] = final_addr;
         } else if writeback {
             self.regs[rn] = addr;
         }
- 
+
         if load { 3 } else { 2 }
     }
- 
+
     fn arm_block_transfer(&mut self, instr: u32, bus: &mut Bus) -> u32 {
         let pre = instr & (1 << 24) != 0;
         let up = instr & (1 << 23) != 0;
@@ -314,22 +314,22 @@ impl Cpu {
         let load = instr & (1 << 20) != 0;
         let rn = ((instr >> 16) & 0xF) as usize;
         let reg_list = instr & 0xFFFF;
- 
+
         let _ = psr_force; // TODO: handle user bank transfer
- 
+
         let count = reg_list.count_ones();
         let base = self.regs[rn];
- 
+
         let (mut addr, end_addr) = if up {
             (base, base.wrapping_add(count * 4))
         } else {
             (base.wrapping_sub(count * 4), base)
         };
- 
+
         if !up {
             addr = base.wrapping_sub(count * 4);
         }
- 
+
         let mut current = if up && pre {
             addr + 4
         } else if up {
@@ -339,12 +339,12 @@ impl Cpu {
         } else {
             addr + 4
         };
- 
+
         let mut cycles = 0u32;
- 
+
         for i in 0..16u32 {
             if reg_list & (1 << i) == 0 { continue; }
- 
+
             if load {
                 self.regs[i as usize] = bus.read32(current);
             } else {
@@ -354,19 +354,19 @@ impl Cpu {
             current = current.wrapping_add(4);
             cycles += 1;
         }
- 
+
         if writeback {
             self.regs[rn] = if up { end_addr } else { base.wrapping_sub(count * 4) };
         }
- 
+
         if load && reg_list & (1 << 15) != 0 {
             self.flush_pipeline(bus);
             return cycles + 3;
         }
- 
+
         cycles + 2
     }
- 
+
     fn arm_multiply(&mut self, instr: u32) -> u32 {
         let accumulate = instr & (1 << 21) != 0;
         let set_flags = instr & (1 << 20) != 0;
@@ -374,20 +374,20 @@ impl Cpu {
         let rn = ((instr >> 12) & 0xF) as usize;
         let rs = ((instr >> 8) & 0xF) as usize;
         let rm = (instr & 0xF) as usize;
- 
+
         let mut result = self.regs[rm].wrapping_mul(self.regs[rs]);
         if accumulate {
             result = result.wrapping_add(self.regs[rn]);
         }
- 
+
         self.regs[rd] = result;
         if set_flags {
             self.cpsr.set_nz(result);
         }
- 
+
         if accumulate { 3 } else { 2 }
     }
- 
+
     fn arm_multiply_long(&mut self, instr: u32) -> u32 {
         let signed = instr & (1 << 22) != 0;
         let accumulate = instr & (1 << 21) != 0;
@@ -396,34 +396,34 @@ impl Cpu {
         let rd_lo = ((instr >> 12) & 0xF) as usize;
         let rs = ((instr >> 8) & 0xF) as usize;
         let rm = (instr & 0xF) as usize;
- 
+
         let mut result: u64 = if signed {
             (self.regs[rm] as i32 as i64 * self.regs[rs] as i32 as i64) as u64
         } else {
             self.regs[rm] as u64 * self.regs[rs] as u64
         };
- 
+
         if accumulate {
             result = result.wrapping_add(((self.regs[rd_hi] as u64) << 32) | self.regs[rd_lo] as u64);
         }
- 
+
         self.regs[rd_lo] = result as u32;
         self.regs[rd_hi] = (result >> 32) as u32;
- 
+
         if set_flags {
             self.cpsr.set_n((result >> 63) != 0);
             self.cpsr.set_z(result == 0);
         }
- 
+
         if accumulate { 4 } else { 3 }
     }
- 
+
     fn arm_swap(&mut self, instr: u32, bus: &mut Bus) -> u32 {
         let byte = instr & (1 << 22) != 0;
         let rn = ((instr >> 16) & 0xF) as usize;
         let rd = ((instr >> 12) & 0xF) as usize;
         let rm = (instr & 0xF) as usize;
- 
+
         let addr = self.regs[rn];
         if byte {
             let tmp = bus.read8(addr);
@@ -434,14 +434,14 @@ impl Cpu {
             bus.write32(addr, self.regs[rm]);
             self.regs[rd] = tmp;
         }
- 
+
         4
     }
- 
+
     fn arm_psr_transfer(&mut self, instr: u32) -> u32 {
         let use_spsr = instr & (1 << 22) != 0;
         let is_msr = instr & (1 << 21) != 0;
- 
+
         if is_msr {
             // MSR - write to PSR
             let val = if instr & (1 << 25) != 0 {
@@ -451,14 +451,14 @@ impl Cpu {
             } else {
                 self.regs[(instr & 0xF) as usize]
             };
- 
+
             let mask = {
                 let mut m = 0u32;
                 if instr & (1 << 19) != 0 { m |= 0xFF000000; } // flags
                 if instr & (1 << 16) != 0 { m |= 0x000000FF; } // control
                 m
             };
- 
+
             if use_spsr {
                 let bank = self.cpsr.mode().bank_index();
                 self.spsr[bank] = (self.spsr[bank] & !mask) | (val & mask);
@@ -481,10 +481,10 @@ impl Cpu {
                 self.cpsr.0
             };
         }
- 
+
         1
     }
- 
+
     fn arm_swi(&mut self, _instr: u32, bus: &Bus) -> u32 {
         self.switch_mode(Mode::Supervisor);
         self.regs[14] = self.regs[15].wrapping_sub(4);
